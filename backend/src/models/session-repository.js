@@ -68,5 +68,9 @@ export function createSessionRepository(database = { query }) {
       );
       return result.rows[0];
     },
+
+    async deleteAll() {
+      await database.query('DELETE FROM study_sessions');
+    },
   };
 }

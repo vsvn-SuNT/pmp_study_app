@@ -58,5 +58,9 @@ export function createQuestionRepository(database = { query }) {
       );
       return result.rows[0] ?? null;
     },
+
+    async deleteAll() {
+      await database.query('DELETE FROM questions');
+    },
   };
 }

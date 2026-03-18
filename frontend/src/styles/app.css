@@ -277,3 +277,55 @@ button:disabled {
     padding-top: 1rem;
   }
 }
+
+.import-controls {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.import-controls > div {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.import-controls label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.import-controls input[type="file"] {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.import-controls button {
+  padding: 0.6rem 1.2rem;
+  font-size: 0.95rem;
+}
+
+.import-controls #import-btn {
+  background: var(--accent);
+  color: white;
+}
+
+.import-controls #clear-btn {
+  background: #e8d4bd;
+  color: var(--text);
+}
+
+/* Bullet point formatting - improves readability of formatted lists */
+.answer-card,
+.feedback,
+.review-card {
+  line-height: 1.6;
+  word-wrap: break-word;
+}

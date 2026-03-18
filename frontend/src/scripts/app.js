@@ -22,6 +22,11 @@ export function formatCountdown(deadlineAt, now = new Date()) {
   return `${minutes}:${seconds}`;
 }
 
+function formatBulletPoints(text) {
+  if (!text) return text;
+  return text.replace(/●\s*/g, '<br/>● ');
+}
+
 export function summarizeResults(summary) {
   return [
     { label: 'Correct', value: `${summary.correctCount} (${summary.correctPercentage}%)` },
@@ -124,6 +129,15 @@ function renderExamSelection() {
 
   qs('app').innerHTML = `
     <section>
+      <h2>Manage Exams</h2>
+      <div class="import-controls">
+        <div>
+          <label for="csv-file">Import from CSV:</label>
+          <input type="file" id="csv-file" accept=".csv" />
+          <button id="import-btn" onclick="window.importExam()">Import Exam</button>
+          <button id="clear-btn" class="secondary" onclick="window.clearAllExams()">Clear All</button>
+        </div>
+      </div>
       <h2>Select an exam set</h2>
       <p>Imported exams may be shorter than 200 questions if invalid CSV rows were skipped during import.</p>
       <div class="grid exam-grid">${examCards || '<p>No ready exam sets are available.</p>'}</div>
@@ -148,7 +162,7 @@ function buildFeedbackMarkup(feedback) {
     <section class="feedback ${tone}">
       <p><strong>${feedback.result === 'correct' ? 'Correct' : 'Incorrect'}</strong></p>
       <p>Correct answer: ${feedback.correctOption}</p>
-      <p>${feedback.explanation}</p>
+      <p>${formatBulletPoints(feedback.explanation)}</p>
     </section>
   `;
 }
@@ -170,7 +184,7 @@ function renderQuestion() {
     }
     return `
       <button class="${classes.join(' ')}" data-answer="${option.key}" ${state.feedback ? 'disabled' : ''}>
-        <strong>${option.key}.</strong> ${option.label}
+        <strong>${option.key}.</strong> ${formatBulletPoints(option.label)}
       </button>
     `;
   }).join('');
@@ -182,7 +196,7 @@ function renderQuestion() {
         <p>Question ${question.questionNumber} of ${question.totalQuestions}</p>
       </div>
 
-      <h2>${question.prompt}</h2>
+      <h2>${formatBulletPoints(question.prompt)}</h2>
       <div class="answer-list">${answerMarkup}</div>
       ${buildFeedbackMarkup(state.feedback)}
       <div class="actions">
@@ -246,10 +260,10 @@ function buildReviewMarkup(item) {
         <h3>Question ${item.questionNumber}</h3>
         <span class="tag ${item.result}">${item.result}</span>
       </div>
-      <p>${item.prompt ?? ''}</p>
+      <p>${formatBulletPoints(item.prompt ?? '')}</p>
       <p><strong>Your answer:</strong> ${item.selectedOption ?? 'Not answered'}</p>
       <p><strong>Correct answer:</strong> ${item.correctOption}</p>
-      <p>${item.explanation}</p>
+      <p>${formatBulletPoints(item.explanation)}</p>
     </article>
   `;
 }
@@ -377,7 +391,49 @@ async function boot() {
   }
 }
 
+async function importExam() {
+  const fileInput = qs('csv-file');
+  if (!fileInput || !fileInput.files.length) {
+    setStatus('Please select a CSV file first');
+    return;
+  }
+
+  const file = fileInput.files[0];
+  try {
+    setStatus(`Importing ${file.name}...`);
+    const csvContent = await file.text();
+    const payload = await request('/api/exams/import', {
+      method: 'POST',
+      body: JSON.stringify({ csvContent, filename: file.name }),
+    });
+    fileInput.value = ''; // Clear input
+    alert(payload.message);
+    setStatus('');
+    await loadExamSets();
+  } catch (error) {
+    alert(`Import failed: ${error.message}`);
+    setStatus('');
+  }
+}
+
+async function clearAllExams() {
+  if (!confirm('Are you sure you want to delete all exams and sessions? This cannot be undone.')) {
+    return;
+  }
+
+  try {
+    setStatus('Clearing database...');
+    await request('/api/exams', { method: 'DELETE' });
+    setStatus('All exams cleared');
+    await loadExamSets();
+  } catch (error) {
+    setStatus(`Clear failed: ${error.message}`);
+  }
+}
+
 if (typeof window !== 'undefined') {
+  window.importExam = importExam;
+  window.clearAllExams = clearAllExams;
   window.addEventListener('DOMContentLoaded', () => {
     boot();
   });

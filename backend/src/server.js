@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { createSessionService } from './services/session-service.js';
 import { createExamsRoutes } from './routes/exams-routes.js';
 import { createSessionsRoutes } from './routes/sessions-routes.js';
+import { createExamSetRepository } from './models/exam-set-repository.js';
+import { createQuestionRepository } from './models/question-repository.js';
+import { createSessionRepository } from './models/session-repository.js';
 
 const currentFile = fileURLToPath(import.meta.url);
 const backendRoot = path.resolve(path.dirname(currentFile), '..');
@@ -58,7 +61,7 @@ function createErrorResponse(error) {
     headers: {
       'content-type': 'application/json; charset=utf-8',
       'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-methods': 'GET,POST,OPTIONS,DELETE',
       'access-control-allow-headers': 'Content-Type',
     },
     body: JSON.stringify({ error: { code, message } }),
@@ -69,14 +72,22 @@ function writeResponse(response, result) {
   response.writeHead(result.status, {
     ...result.headers,
     'access-control-allow-origin': '*',
-    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    'access-control-allow-methods': 'GET,POST,OPTIONS,DELETE',
     'access-control-allow-headers': 'Content-Type',
   });
   response.end(result.body);
 }
 
-export function createApp({ sessionService = createSessionService() } = {}) {
-  const handlers = [createExamsRoutes({ sessionService }), createSessionsRoutes({ sessionService })];
+export function createApp({ 
+  sessionService = createSessionService(),
+  examSetRepository = createExamSetRepository(),
+  questionRepository = createQuestionRepository(),
+  sessionRepository = createSessionRepository(),
+} = {}) {
+  const handlers = [
+    createExamsRoutes({ sessionService, examSetRepository, questionRepository, sessionRepository }),
+    createSessionsRoutes({ sessionService }),
+  ];
 
   return http.createServer(async (request, response) => {
     const url = new URL(request.url, 'http://localhost');

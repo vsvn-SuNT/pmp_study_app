@@ -139,29 +139,126 @@ def parse_question(q_num, content):
         answer_end = correct_answer_idx
         # Backward search from correct_answer to find where answers start
         # Look for the pattern: 4 consecutive lines with - **A, - **B, - **C, - **D
+        # OR new format: AError!, BError!, CError!, DError!
+        # Note: answers can be multi-line, so we look for the FIRST occurrence of each letter
+        
         for idx in range(correct_answer_idx - 1, -1, -1):
             line = lines[idx].strip()
+            # Try old format first: - **D
             if re.match(r'^\s*-\s+\*\*D\s+', line):
-                # Found D, so answers should be somewhere before this
-                # Now search backwards from here to find A, B, C, D group
+                # Found D, now search backwards to find A, B, C (skipping continuation lines)
                 d_idx = idx
-                # Go back to find C, B, A
-                if d_idx > 2:
-                    c_match = re.match(r'^\s*-\s+\*\*C\s+', lines[d_idx - 1].strip())
-                    b_match = re.match(r'^\s*-\s+\*\*B\s+', lines[d_idx - 2].strip())
-                    a_match = re.match(r'^\s*-\s+\*\*A\s+', lines[d_idx - 3].strip())
-                    
-                    if c_match and b_match and a_match:
-                        # Found the correct sequence: A, B, C, D
-                        answer_start = d_idx - 3
+                
+                # Find C: search backwards from D, skip lines that don't start with - **
+                c_idx = -1
+                for j in range(d_idx - 1, -1, -1):
+                    if re.match(r'^\s*-\s+\*\*C\s+', lines[j].strip()):
+                        c_idx = j
                         break
-    
-    # Fallback: if not found with above method, use old method but skip lines before question content
-    if answer_start == 999:
-        for idx, line in enumerate(lines):
-            if re.match(r'^\s*-\s+\*\*[A-D]\s+', line):
-                answer_start = idx
+                
+                if c_idx == -1:
+                    continue
+                
+                # Find B: search backwards from C, skip continuation lines
+                b_idx = -1
+                for j in range(c_idx - 1, -1, -1):
+                    if re.match(r'^\s*-\s+\*\*B\s+', lines[j].strip()):
+                        b_idx = j
+                        break
+                
+                if b_idx == -1:
+                    continue
+                
+                # Find A: search backwards from B, skip continuation lines
+                a_idx = -1
+                for j in range(b_idx - 1, -1, -1):
+                    if re.match(r'^\s*-\s+\*\*A\s+', lines[j].strip()):
+                        a_idx = j
+                        break
+                
+                if a_idx == -1:
+                    continue
+                
+                # Found all 4 answers
+                answer_start = a_idx
                 break
+            
+            # Try new format: DError!
+            elif re.match(r'^DError!\s+', line):
+                d_idx = idx
+                
+                # Find C: search backwards from D
+                c_idx = -1
+                for j in range(d_idx - 1, -1, -1):
+                    if re.match(r'^CError!\s+', lines[j].strip()):
+                        c_idx = j
+                        break
+                
+                if c_idx == -1:
+                    continue
+                
+                # Find B: search backwards from C
+                b_idx = -1
+                for j in range(c_idx - 1, -1, -1):
+                    if re.match(r'^BError!\s+', lines[j].strip()):
+                        b_idx = j
+                        break
+                
+                if b_idx == -1:
+                    continue
+                
+                # Find A: search backwards from B
+                a_idx = -1
+                for j in range(b_idx - 1, -1, -1):
+                    if re.match(r'^AError!\s+', lines[j].strip()):
+                        a_idx = j
+                        break
+                
+                if a_idx == -1:
+                    continue
+                
+                # Found all 4 answers in new format
+                answer_start = a_idx
+                break
+    
+    # Fallback: if not found with above method
+    # Only search AFTER the question content (after "?")
+    if answer_start == 999:
+        # First, find where the question ends (last "?" before Correct Answer)
+        question_end_fallback = 0
+        if correct_answer_idx >= 0:
+            for idx in range(correct_answer_idx - 1, -1, -1):
+                if lines[idx].rstrip().endswith('?'):
+                    question_end_fallback = idx + 1
+                    break
+        
+        # Search for first A answer AFTER question ends
+        search_start = max(question_end_fallback, 0)
+        for idx in range(search_start, len(lines)):
+            line = lines[idx].strip()
+            # Look for both old format "- **A" and new format "AError!"
+            # But specifically looking for answer content, not scenario text
+            if re.match(r'^\s*-\s+\*\*A\s+', lines[idx]):
+                # Additional check: make sure this is followed by B, C, D nearby
+                if idx + 3 < len(lines):
+                    has_bcd = (
+                        re.match(r'^\s*-\s+\*\*B\s+', lines[idx + 1].strip()) and
+                        re.match(r'^\s*-\s+\*\*C\s+', lines[idx + 2].strip()) and
+                        re.match(r'^\s*-\s+\*\*D\s+', lines[idx + 3].strip())
+                    )
+                    if has_bcd:
+                        answer_start = idx
+                        break
+            elif re.match(r'^AError!\s+', line):
+                if idx + 3 < len(lines):
+                    has_bcd = (
+                        re.match(r'^BError!\s+', lines[idx + 1].strip()) and
+                        re.match(r'^CError!\s+', lines[idx + 2].strip()) and
+                        re.match(r'^DError!\s+', lines[idx + 3].strip())
+                    )
+                    if has_bcd:
+                        answer_start = idx
+                        break
     
     # ===== QUESTION TEXT =====
     # Find where actual question ends (line ending with ?)
@@ -174,19 +271,23 @@ def parse_question(q_num, content):
     if question_end_idx == 0:
         question_end_idx = min(answer_start, len(lines))
     
-    # Collect question lines (everything before the actual question ends with ?)
+    # Collect question lines (everything from "Question ID:" to ?)
     q_text = []
-    for line in lines[:question_end_idx]:
+    
+    # Find start: look for line containing "Question ID:"
+    q_start = 0
+    for idx in range(len(lines)):
+        if 'Question ID' in lines[idx]:
+            q_start = idx + 1
+            break
+    
+    for line in lines[q_start:question_end_idx]:
         s = line.strip()
-        # Skip empty, skip markdown headers, skip separators, skip metadata lines
-        # Skip: "Question X of Y", "Question ID: ...", "of 200 Question ID: ..."
-        # But DON'T skip "- **A ..." if it's part of the scenario (before the ?)
-        if (s and not s.startswith('**') and not s.startswith('---') and 
-            not s.startswith('of ') and not s.startswith('Question ') and 
-            not s.startswith('Question ID') and not s.startswith('Top of Form')):
-            # Strip the "- **A " prefix if this is scenario description
+        # Skip empty, skip markdown separators
+        if (s and not s.startswith('---')):
+            # Strip the "- **A " prefix if this is scenario description (part of the question)
             if re.match(r'^\s*-\s+\*\*[A-D]\s+', s):
-                # Remove the "- **X " prefix
+                # Remove the "- **X " prefix to capture just the text
                 s = re.sub(r'^\s*-\s+\*\*[A-D]\s+', '', s)
             # Remove trailing ** if present
             s = re.sub(r'\*\*\s*$', '', s)
@@ -200,13 +301,20 @@ def parse_question(q_num, content):
     for line in lines[answer_start:answer_end]:
         s = line.strip()
         
-        # Pattern: - **A Something** or - **A Something (no closing **)
+        # Pattern 1: Old format - **A Something** or - **A Something (no closing **)
         match = re.match(r'^\s*-\s+\*\*([A-D])\s+(.+?)(?:\*\*)?$', s)
         if match:
             letter = match.group(1)
             answer = match.group(2).strip()
             # Remove trailing ** if present
             answer = re.sub(r'\*\*\s*$', '', answer)
+            data[f'Answer {letter}'] = answer
+        
+        # Pattern 2: New format - [A-D]Error! Not a valid embedded object.TEXT
+        match = re.match(r'^([A-D])Error!\s+Not a valid embedded object\.(.+)$', s)
+        if match:
+            letter = match.group(1)
+            answer = match.group(2).strip()
             data[f'Answer {letter}'] = answer
     
     # ===== CORRECT ANSWER =====
