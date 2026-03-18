@@ -10,24 +10,35 @@ import csv
 from pathlib import Path
 
 
-def main():
-    """Main conversion"""
+def main(md_file, output_dir="csv"):
+    """Main conversion
+    
+    Args:
+        md_file (str): Đường dẫn file markdown
+        output_dir (str): Thư mục output (mặc định: csv)
+    """
     
     print("\n" + "=" * 70)
     print("🎯 PMP MD → CSV Converter")
     print("=" * 70 + "\n")
     
-    md_file = "PMP Exam Simulator 01 (1-200).md"
-    csv_file = "PMP_Questions.csv"
+    md_path = Path(md_file)
     
     # Check file exists
-    if not Path(md_file).exists():
+    if not md_path.exists():
         print(f"❌ File not found: {md_file}")
         return False
     
+    # Tạo thư mục output nếu chưa tồn tại
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # Tên file CSV output
+    csv_file = str(output_path / f"{md_path.stem}.csv")
+    
     print(f"📖 Reading: {md_file}")
     
-    with open(md_file, 'r', encoding='utf-8') as f:
+    with open(str(md_path), 'r', encoding='utf-8') as f:
         content = f.read()
     
     print(f"✓ File size: {len(content):,} bytes\n")
@@ -112,28 +123,75 @@ def parse_question(q_num, content):
     lines = content.split('\n')
     
     # ===== FIND SECTION BOUNDARIES =====
-    # Find where answers start (- **A pattern)
-    answer_start = 999
+    # Find "Correct Answer:" line first
+    correct_answer_idx = -1
     for idx, line in enumerate(lines):
-        if re.match(r'^\s*-\s+\*\*[A-D]\s+', line):
-            answer_start = idx
+        if re.match(r'^\s*(?:Correct\s+)?Answer\s*:\s*[A-D]', line, re.IGNORECASE):
+            correct_answer_idx = idx
             break
     
-    # Find where correct answer line is (Answer: X)
+    # If found "Correct Answer:", backward search to find the 4 answer choices (A, B, C, D)
+    # They should be immediately before "Correct Answer:" line
+    answer_start = 999
     answer_end = len(lines)
-    for idx, line in enumerate(lines):
-        if re.match(r'^\s*Answer\s*:\s*[A-D]', line, re.IGNORECASE):
-            answer_end = idx
-            break
+    
+    if correct_answer_idx >= 0:
+        answer_end = correct_answer_idx
+        # Backward search from correct_answer to find where answers start
+        # Look for the pattern: 4 consecutive lines with - **A, - **B, - **C, - **D
+        for idx in range(correct_answer_idx - 1, -1, -1):
+            line = lines[idx].strip()
+            if re.match(r'^\s*-\s+\*\*D\s+', line):
+                # Found D, so answers should be somewhere before this
+                # Now search backwards from here to find A, B, C, D group
+                d_idx = idx
+                # Go back to find C, B, A
+                if d_idx > 2:
+                    c_match = re.match(r'^\s*-\s+\*\*C\s+', lines[d_idx - 1].strip())
+                    b_match = re.match(r'^\s*-\s+\*\*B\s+', lines[d_idx - 2].strip())
+                    a_match = re.match(r'^\s*-\s+\*\*A\s+', lines[d_idx - 3].strip())
+                    
+                    if c_match and b_match and a_match:
+                        # Found the correct sequence: A, B, C, D
+                        answer_start = d_idx - 3
+                        break
+    
+    # Fallback: if not found with above method, use old method but skip lines before question content
+    if answer_start == 999:
+        for idx, line in enumerate(lines):
+            if re.match(r'^\s*-\s+\*\*[A-D]\s+', line):
+                answer_start = idx
+                break
     
     # ===== QUESTION TEXT =====
-    # Collect question lines (everything before answers)
+    # Find where actual question ends (line ending with ?)
+    question_end_idx = 0
+    for idx in range(min(answer_start, len(lines))):
+        if lines[idx].rstrip().endswith('?'):
+            question_end_idx = idx + 1
+    
+    # If no ? found, use answer_start
+    if question_end_idx == 0:
+        question_end_idx = min(answer_start, len(lines))
+    
+    # Collect question lines (everything before the actual question ends with ?)
     q_text = []
-    for line in lines[:answer_start]:
+    for line in lines[:question_end_idx]:
         s = line.strip()
-        # Skip empty, skip markdown headers, skip separators
-        if s and not s.startswith('**') and not s.startswith('---'):
-            q_text.append(s)
+        # Skip empty, skip markdown headers, skip separators, skip metadata lines
+        # Skip: "Question X of Y", "Question ID: ...", "of 200 Question ID: ..."
+        # But DON'T skip "- **A ..." if it's part of the scenario (before the ?)
+        if (s and not s.startswith('**') and not s.startswith('---') and 
+            not s.startswith('of ') and not s.startswith('Question ') and 
+            not s.startswith('Question ID') and not s.startswith('Top of Form')):
+            # Strip the "- **A " prefix if this is scenario description
+            if re.match(r'^\s*-\s+\*\*[A-D]\s+', s):
+                # Remove the "- **X " prefix
+                s = re.sub(r'^\s*-\s+\*\*[A-D]\s+', '', s)
+            # Remove trailing ** if present
+            s = re.sub(r'\*\*\s*$', '', s)
+            if s:
+                q_text.append(s)
     
     data['Question'] = ' '.join(q_text).strip()
     
@@ -153,19 +211,36 @@ def parse_question(q_num, content):
     
     # ===== CORRECT ANSWER =====
     for line in lines:
-        match = re.match(r'^\s*Answer\s*:\s*([A-D])', line, re.IGNORECASE)
+        # Match both "Answer: X" and "Correct Answer: X" formats
+        match = re.match(r'^\s*(?:Correct\s+)?Answer\s*:\s*([A-D])', line, re.IGNORECASE)
         if match:
             data['Correct Answer'] = match.group(1)
             break
     
     # ===== HINT =====
+    # Try pattern 1: **Hint:** label + text
     hint_match = re.search(
-        r'\*\*Hint:\*\*\s*([\s\S]*?)\n\n\*\*Explanation:\*\*',
+        r'\*\*Hint:\*\*\s*([\s\S]*?)(?=\n\n\*\*(?:Explanation|Details):\*\*)',
         content,
         re.IGNORECASE
     )
+    
     if hint_match:
         hint = hint_match.group(1).strip()
+    else:
+        # Try pattern 2: Text between "Answer: X" and "**Explanation:**" (without Hint label)
+        # This handles cases where hint text is directly after "Answer: X" line
+        hint_match = re.search(
+            r'(?:Correct\s+)?Answer\s*:\s*[A-D]\n([\s\S]+?)\n\n\*\*Explanation:\*\*',
+            content,
+            re.IGNORECASE
+        )
+        if hint_match:
+            hint = hint_match.group(1).strip()
+        else:
+            hint = ""
+    
+    if hint:
         # Remove bullet list marker if present
         hint = re.sub(r'^-\s+', '', hint)
         hint = re.sub(r'\n\s*', ' ', hint)
@@ -186,7 +261,7 @@ def parse_question(q_num, content):
     
     # ===== DETAILS FOR EACH OPTION =====
     details_match = re.search(
-        r'\*\*Details for Each Option:\*\*\s*([\s\S]*?)(?=\n\n\*\*Reference|---)',
+        r'\*\*Details for Each Option:\*\*\s*([\s\S]*?)(?=\*\*Reference|\Z)',
         content,
         re.IGNORECASE
     )
@@ -194,28 +269,25 @@ def parse_question(q_num, content):
     if details_match:
         details_text = details_match.group(1)
         
-        # Tìm toàn bộ text cho mỗi A, B, C, D
-        # Pattern: từ - **A ... đến trước - **B** hoặc end
+        # Extract text for each A, B, C, D
         for letter in ['A', 'B', 'C', 'D']:
-            # Tìm dòng bắt đầu với - **X (X = A, B, C, or D)
-            # Lấy từ đó đến trước dòng tiếp theo - **Y hoặc end
-            next_letter_pattern = f"[{''.join([l for l in 'ABCD' if l > letter])}]" if letter < 'D' else ''
             if letter < 'D':
-                # Có kí tự tiếp theo: A->B,C,D | B->C,D | C->D
+                # For A, B, C: find from - **A to before next option - **B, - **C, etc.
                 next_letters = ''.join([l for l in 'ABCD' if l > letter])
-                pattern = rf'-\s+\*\*{letter}\s+([\s\S]+?)\n-\s+\*\*[{next_letters}]'
+                # Pattern: - **A text until \n- **[B,C,D] or end
+                pattern = rf'-\s+\*\*{letter}\s+([\s\S]+?)(?=\n-\s+\*\*[{next_letters}]|$)'
                 detail_match = re.search(pattern, details_text)
             else:
-                # D là kí tự cuối: lấy từ - **D đến end
+                # D is last: from - **D to end
                 pattern = rf'-\s+\*\*{letter}\s+([\s\S]+?)$'
                 detail_match = re.search(pattern, details_text)
             
             if detail_match:
                 full_text = detail_match.group(1).strip()
-                # Xóa ** thừa từ dòng - **A ...** 
+                # Remove ** artifacts
                 full_text = re.sub(r'^\*\*\s*', '', full_text)
                 full_text = re.sub(r'\*\*\s*', '', full_text)
-                # Nén whitespace
+                # Compress whitespace
                 full_text = re.sub(r'\n\s*', ' ', full_text)
                 full_text = re.sub(r'\s+', ' ', full_text)
                 data[f'Details for Answer {letter}'] = full_text[:400]
@@ -244,12 +316,37 @@ def save_to_csv(questions, csv_file):
 
 
 if __name__ == "__main__":
-    try:
-        success = main()
-        if not success:
+    import sys
+    
+    # Mặc định: sử dụng tất cả file .md trong thư mục hiện tại
+    if len(sys.argv) > 1:
+        md_file = sys.argv[1]
+        output_dir = sys.argv[2] if len(sys.argv) > 2 else "csv"
+        try:
+            success = main(md_file, output_dir)
+            if not success:
+                exit(1)
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
             exit(1)
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        exit(1)
+    else:
+        # Xử lý tất cả file .md trong thư mục hiện tại
+        md_dir = Path(__file__).parent
+        md_files = list(md_dir.glob("*.md"))
+        
+        if not md_files:
+            print("❌ No markdown files found in current directory")
+            exit(1)
+        
+        for md_file in md_files:
+            print(f"\n{'=' * 70}")
+            try:
+                success = main(str(md_file), "csv")
+                if not success:
+                    print(f"⚠️  Failed to process {md_file.name}")
+            except Exception as e:
+                print(f"\n❌ Error processing {md_file.name}: {e}")
+                import traceback
+                traceback.print_exc()

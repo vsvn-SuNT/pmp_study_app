@@ -10,65 +10,83 @@ import os
 from pathlib import Path
 
 
-def extract_pdf_to_markdown(pdf_path, output_path=None):
+def extract_pdf_to_markdown(pdf_directory, output_directory=None):
     """
-    Extract text từ PDF file và lưu vào markdown file
+    Extract text từ tất cả file PDF trong một thư mục và lưu vào markdown files
     
     Args:
-        pdf_path (str): Đường dẫn tới file PDF
-        output_path (str, optional): Đường dẫn tới file markdown output.
-                                   Nếu None, sẽ tạo file .md cùng thư mục với PDF
+        pdf_directory (str): Đường dẫn tới thư mục chứa file PDF
+        output_directory (str, optional): Đường dẫn tới thư mục lưu markdown output.
+                                        Nếu None, sẽ tạo file .md cùng thư mục với PDF
     
     Returns:
-        bool: True nếu thành công, False nếu có lỗi
+        int: Số file PDF được xử lý thành công
     """
     
-    # Kiểm tra file PDF có tồn tại không
-    if not os.path.exists(pdf_path):
-        print(f"❌ Lỗi: File PDF '{pdf_path}' không tồn tại!")
-        return False
+    pdf_dir = Path(pdf_directory)
     
-    # Xác định đường dẫn output
-    if output_path is None:
-        base_path = Path(pdf_path).stem
-        output_path = Path(pdf_path).parent / f"{base_path}.md"
+    # Kiểm tra thư mục có tồn tại không
+    if not pdf_dir.exists():
+        print(f"❌ Lỗi: Thư mục '{pdf_directory}' không tồn tại!")
+        return 0
     
-    try:
-        print(f"📖 Đang xử lý: {pdf_path}")
-        print(f"💾 Output: {output_path}")
-        
-        markdown_content = []
-        page_count = 0
-        
-        # Mở và đọc PDF file
-        with pdfplumber.open(pdf_path) as pdf:
-            total_pages = len(pdf.pages)
+    # Tìm tất cả file PDF
+    pdf_files = list(pdf_dir.glob('*.pdf'))
+    
+    if not pdf_files:
+        print(f"⚠️  Không tìm thấy file PDF nào trong thư mục '{pdf_directory}'")
+        return 0
+    
+    print(f"🔍 Tìm thấy {len(pdf_files)} file PDF\n")
+    
+    success_count = 0
+    
+    for pdf_file in pdf_files:
+        try:
+            # Xác định đường dẫn output
+            if output_directory:
+                output_dir = Path(output_directory)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_path = output_dir / f"{pdf_file.stem}.md"
+            else:
+                output_path = pdf_file.with_suffix('.md')
             
-            for page_num, page in enumerate(pdf.pages, 1):
-                # Extract text với layout information
-                text = page.extract_text()
+            print(f"📖 Đang xử lý: {pdf_file.name}")
+            print(f"💾 Output: {output_path}")
+            
+            markdown_content = []
+            page_count = 0
+            
+            # Mở và đọc PDF file
+            with pdfplumber.open(str(pdf_file)) as pdf:
+                total_pages = len(pdf.pages)
                 
-                if text:
-                    page_count += 1
-                    # Thêm page break khi có nhiều trang
-                    if page_num > 1:
-                        markdown_content.append("\n---\n")
+                for page_num, page in enumerate(pdf.pages, 1):
+                    # Extract text với layout information
+                    text = page.extract_text()
                     
-                    # Xử lý text để giữ format
-                    markdown_content.append(_process_text(text))
-                    print(f"  ✓ Trang {page_num}/{total_pages}")
-        
-        # Ghi vào file markdown
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(markdown_content))
-        
-        print(f"\n✅ Thành công! Đã extract {page_count} trang từ PDF")
-        print(f"📄 File markdown được lưu tại: {output_path}")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Lỗi khi xử lý PDF: {str(e)}")
-        return False
+                    if text:
+                        page_count += 1
+                        # Thêm page break khi có nhiều trang
+                        if page_num > 1:
+                            markdown_content.append("\n---\n")
+                        
+                        # Xử lý text để giữ format
+                        markdown_content.append(_process_text(text))
+                        print(f"  ✓ Trang {page_num}/{total_pages}")
+            
+            # Ghi vào file markdown
+            with open(str(output_path), 'w', encoding='utf-8') as f:
+                f.write('\n'.join(markdown_content))
+            
+            print(f"✅ Thành công! Đã extract {page_count} trang từ PDF")
+            print(f"📄 File markdown được lưu tại: {output_path}\n")
+            success_count += 1
+            
+        except Exception as e:
+            print(f"❌ Lỗi khi xử lý {pdf_file.name}: {str(e)}\n")
+    
+    return success_count
 
 
 def _process_text(text):
@@ -112,35 +130,15 @@ def _process_text(text):
 
 def extract_all_pdfs_in_directory(directory, output_directory=None):
     """
+    (Deprecated) Sử dụng extract_pdf_to_markdown thay vì hàm này
+    
     Extract tất cả PDF files trong một thư mục
     
     Args:
         directory (str): Đường dẫn thư mục chứa PDF files
         output_directory (str, optional): Thư mục lưu file markdown
     """
-    
-    directory = Path(directory)
-    
-    if not directory.exists():
-        print(f"❌ Thư mục '{directory}' không tồn tại!")
-        return
-    
-    pdf_files = list(directory.glob('*.pdf'))
-    
-    if not pdf_files:
-        print(f"⚠️  Không tìm thấy file PDF nào trong thư mục '{directory}'")
-        return
-    
-    print(f"🔍 Tìm thấy {len(pdf_files)} file PDF\n")
-    
-    for pdf_file in pdf_files:
-        if output_directory:
-            output_path = Path(output_directory) / f"{pdf_file.stem}.md"
-        else:
-            output_path = pdf_file.with_suffix('.md')
-        
-        extract_pdf_to_markdown(str(pdf_file), str(output_path))
-        print()
+    return extract_pdf_to_markdown(directory, output_directory)
 
 
 # Main script
@@ -149,10 +147,10 @@ if __name__ == "__main__":
     
     # Lấy đường dẫn từ arguments hoặc sử dụng default
     if len(sys.argv) > 1:
-        pdf_file = sys.argv[1]
-        output_file = sys.argv[2] if len(sys.argv) > 2 else None
-        extract_pdf_to_markdown(pdf_file, output_file)
+        pdf_directory = sys.argv[1]
+        output_directory = sys.argv[2] if len(sys.argv) > 2 else None
+        extract_pdf_to_markdown(pdf_directory, output_directory)
     else:
         # Default: Extract từ tất cả PDF files trong thư mục hiện tại
         current_dir = Path(__file__).parent
-        extract_all_pdfs_in_directory(str(current_dir))
+        extract_pdf_to_markdown(str(current_dir))
