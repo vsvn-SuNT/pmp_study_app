@@ -2,16 +2,17 @@
 
 export function createSessionRepository(database = { query }) {
   return {
-    async create({ examSetId, mode, deadlineAt, totalQuestions }) {
+    async create({ examSetId, mode, deadlineAt, totalQuestions, userId = null }) {
       const result = await database.query(
-        `INSERT INTO study_sessions (exam_set_id, mode, deadline_at, total_questions, unanswered_count)
-         VALUES ($1, $2, $3, $4, $4)
+        `INSERT INTO study_sessions (exam_set_id, mode, deadline_at, total_questions, unanswered_count, user_id)
+         VALUES ($1, $2, $3, $4, $4, $5)
          RETURNING id, exam_set_id AS "examSetId", mode, status, started_at AS "startedAt",
                    deadline_at AS "deadlineAt", completed_at AS "completedAt", total_questions AS "totalQuestions",
                    current_question_number AS "currentQuestionNumber", correct_count AS "correctCount",
                    incorrect_count AS "incorrectCount", unanswered_count AS "unansweredCount",
-                   correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage"`,
-        [examSetId, mode, deadlineAt, totalQuestions],
+                   correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage",
+                   user_id AS "userId"`,
+        [examSetId, mode, deadlineAt, totalQuestions, userId],
       );
       return result.rows[0];
     },
@@ -22,12 +23,60 @@ export function createSessionRepository(database = { query }) {
                 deadline_at AS "deadlineAt", completed_at AS "completedAt", total_questions AS "totalQuestions",
                 current_question_number AS "currentQuestionNumber", correct_count AS "correctCount",
                 incorrect_count AS "incorrectCount", unanswered_count AS "unansweredCount",
-                correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage"
+                correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage",
+                user_id AS "userId"
          FROM study_sessions
          WHERE id = $1`,
         [sessionId],
       );
       return result.rows[0] ?? null;
+    },
+
+    async getByIdAndUserId(sessionId, userId) {
+      const result = await database.query(
+        `SELECT id, exam_set_id AS "examSetId", mode, status, started_at AS "startedAt",
+                deadline_at AS "deadlineAt", completed_at AS "completedAt", total_questions AS "totalQuestions",
+                current_question_number AS "currentQuestionNumber", correct_count AS "correctCount",
+                incorrect_count AS "incorrectCount", unanswered_count AS "unansweredCount",
+                correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage",
+                user_id AS "userId"
+         FROM study_sessions
+         WHERE id = $1 AND user_id = $2`,
+        [sessionId, userId],
+      );
+      return result.rows[0] ?? null;
+    },
+
+    async findActiveSessionForUser(userId, examSetId) {
+      const result = await database.query(
+        `SELECT id, exam_set_id AS "examSetId", mode, status, started_at AS "startedAt",
+                deadline_at AS "deadlineAt", completed_at AS "completedAt", total_questions AS "totalQuestions",
+                current_question_number AS "currentQuestionNumber", correct_count AS "correctCount",
+                incorrect_count AS "incorrectCount", unanswered_count AS "unansweredCount",
+                correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage",
+                user_id AS "userId"
+         FROM study_sessions
+         WHERE user_id = $1 AND exam_set_id = $2 AND status = 'in_progress'
+         LIMIT 1`,
+        [userId, examSetId],
+      );
+      return result.rows[0] ?? null;
+    },
+
+    async listSessionsForUser(userId) {
+      const result = await database.query(
+        `SELECT id, exam_set_id AS "examSetId", mode, status, started_at AS "startedAt",
+                deadline_at AS "deadlineAt", completed_at AS "completedAt", total_questions AS "totalQuestions",
+                current_question_number AS "currentQuestionNumber", correct_count AS "correctCount",
+                incorrect_count AS "incorrectCount", unanswered_count AS "unansweredCount",
+                correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage",
+                user_id AS "userId"
+         FROM study_sessions
+         WHERE user_id = $1
+         ORDER BY started_at DESC`,
+        [userId],
+      );
+      return result.rows;
     },
 
     async updateProgress(sessionId, currentQuestionNumber) {
@@ -40,7 +89,8 @@ export function createSessionRepository(database = { query }) {
                 deadline_at AS "deadlineAt", completed_at AS "completedAt", total_questions AS "totalQuestions",
                 current_question_number AS "currentQuestionNumber", correct_count AS "correctCount",
                 incorrect_count AS "incorrectCount", unanswered_count AS "unansweredCount",
-                correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage"
+                correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage",
+                user_id AS "userId"
          FROM study_sessions
          WHERE id = $1 AND status = 'in_progress'`,
         [sessionId],
@@ -63,10 +113,15 @@ export function createSessionRepository(database = { query }) {
                    deadline_at AS "deadlineAt", completed_at AS "completedAt", total_questions AS "totalQuestions",
                    current_question_number AS "currentQuestionNumber", correct_count AS "correctCount",
                    incorrect_count AS "incorrectCount", unanswered_count AS "unansweredCount",
-                   correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage"`,
+                   correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage",
+                   user_id AS "userId"`,
         [sessionId, status, summary.correctCount, summary.incorrectCount, summary.unansweredCount, summary.correctPercentage, summary.incorrectPercentage],
       );
       return result.rows[0];
+    },
+
+    async deleteByExamSetId(examSetId) {
+      await database.query('DELETE FROM study_sessions WHERE exam_set_id = $1', [examSetId]);
     },
 
     async deleteAll() {

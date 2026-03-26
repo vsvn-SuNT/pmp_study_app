@@ -23,6 +23,7 @@ function buildQuestionPayload(session, question, answer) {
     questionNumber: question.questionNumber,
     totalQuestions: session.totalQuestions,
     prompt: question.prompt,
+    imageUrl: question.imageUrl || null,
     options: [
       { key: 'A', label: question.optionA },
       { key: 'B', label: question.optionB },
@@ -62,10 +63,22 @@ export function createSessionService({
       return examSetRepository.listReady();
     },
 
-    async startSession({ examSetId, mode }) {
+    async startSession({ examSetId, mode }, userId = null) {
       const examSet = await examSetRepository.getById(examSetId);
       if (!examSet || examSet.importStatus !== 'ready' || examSet.questionCount <= 0) {
         throw new Error('The selected exam set does not contain any valid questions.');
+      }
+
+      // Check if user has an active session for this exam
+      if (userId) {
+        const existingSession = await sessionRepository.findActiveSessionForUser(userId, examSetId);
+        if (existingSession) {
+          // Return existing session instead of creating a new one
+          return {
+            ...toSessionSummary({ ...existingSession, importSummary: examSet.importSummary }),
+            resumed: true,
+          };
+        }
       }
 
       const orderedQuestions = shuffleQuestions(await questionRepository.listByExamSet(examSetId), random);
@@ -76,11 +89,13 @@ export function createSessionService({
         mode,
         deadlineAt,
         totalQuestions: orderedQuestions.length,
+        userId,
       });
       await sessionQuestionRepository.replaceForSession(session.id, orderedQuestions);
 
       return {
         ...toSessionSummary({ ...session, importSummary: examSet.importSummary }),
+        resumed: false,
       };
     },
 
@@ -111,6 +126,40 @@ export function createSessionService({
       const answer = await sessionAnswerRepository.getForSessionQuestion(sessionId, questionNumber);
       const examSet = await examSetRepository.getById(session.examSetId);
       return buildQuestionPayload({ ...session, importSummary: examSet?.importSummary ?? null }, question, answer);
+    },
+
+    async getAllQuestions(sessionId) {
+      const session = await sessionRepository.getById(sessionId);
+      if (!session) {
+        throw new Error('Session not found.');
+      }
+
+      if (session.mode === 'exam' && hasExpired(session.deadlineAt)) {
+        return this.completeSession(sessionId, { expired: true });
+      }
+
+      const questions = await sessionQuestionRepository.listForSession(sessionId);
+      const answers = await sessionAnswerRepository.listForSession(sessionId);
+      const examSet = await examSetRepository.getById(session.examSetId);
+      
+      const answersMap = new Map();
+      answers.forEach(answer => {
+        answersMap.set(answer.questionNumber, answer);
+      });
+
+      const questionsPayload = questions.map(question => {
+        const answer = answersMap.get(question.questionNumber);
+        return buildQuestionPayload({ ...session, importSummary: examSet?.importSummary ?? null }, question, answer);
+      });
+
+      return {
+        sessionId: session.id,
+        mode: session.mode,
+        totalQuestions: session.totalQuestions,
+        deadlineAt: session.deadlineAt,
+        importSummary: session.importSummary,
+        questions: questionsPayload,
+      };
     },
 
     async submitAnswer(sessionId, { questionNumber, selectedOption }) {

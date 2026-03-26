@@ -23,6 +23,51 @@
       <section id="app" class="panel"></section>
     </main>
 
+    <!-- Import Modal -->
+    <div id="import-modal" class="modal modal-hidden" role="dialog" aria-labelledby="import-modal-title">
+      <div class="modal-overlay"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="import-modal-title">Import Exam from CSV</h2>
+          <button class="modal-close" onclick="window.closeImportModal()" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="csv-file">Select CSV File:</label>
+            <input type="file" id="csv-file" accept=".csv" />
+          </div>
+          <div class="form-group">
+            <label for="exam-name">Exam Name (optional):</label>
+            <input type="text" id="exam-name" placeholder="e.g., PMP Practice Set 1" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="secondary" onclick="window.closeImportModal()">Cancel</button>
+          <button id="import-btn" class="primary" onclick="window.importExam()">Import Exam</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal modal-hidden" role="dialog" aria-labelledby="confirm-modal-title">
+      <div class="modal-overlay"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="confirm-modal-title">Confirm Action</h2>
+        </div>
+        <div class="modal-body">
+          <p id="confirm-modal-message"></p>
+        </div>
+        <div class="modal-footer">
+          <button id="confirm-cancel-btn" class="secondary">Cancel</button>
+          <button id="confirm-ok-btn" class="primary danger">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container" role="region" aria-live="polite" aria-atomic="true"></div>
+
     <script type="module" src="/scripts/app.js"></script>
   </body>
 </html>

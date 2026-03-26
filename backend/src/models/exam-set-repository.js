@@ -48,5 +48,9 @@ export function createExamSetRepository(database = { query }) {
     async deleteAll() {
       await database.query('DELETE FROM exam_sets');
     },
+
+    async deleteById(id) {
+      await database.query('DELETE FROM exam_sets WHERE id = $1', [id]);
+    },
   };
 }

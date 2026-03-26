@@ -11,6 +11,8 @@ const REQUIRED_HEADERS = [
   'Explanation',
 ];
 
+const OPTIONAL_HEADERS = ['Image_URL', 'Hint', 'Details for Answer A', 'Details for Answer B', 'Details for Answer C', 'Details for Answer D'];
+
 function parseCsvRow(content) {
   const fields = [];
   let field = '';
@@ -94,6 +96,7 @@ function normalizeQuestion(headers, row, sequenceNumber) {
     detailB: item['Details for Answer B'],
     detailC: item['Details for Answer C'],
     detailD: item['Details for Answer D'],
+    imageUrl: item.Image_URL,
   };
 }
 

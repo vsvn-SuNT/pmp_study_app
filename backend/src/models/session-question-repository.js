@@ -17,7 +17,7 @@ export function createSessionQuestionRepository(database = { query }) {
     async getForSessionQuestion(sessionId, questionNumber) {
       const result = await database.query(
         `SELECT q.id, q.exam_set_id AS "examSetId", sq.question_number AS "questionNumber",
-                q.source_number AS "sourceNumber", q.prompt,
+                q.source_number AS "sourceNumber", q.prompt, q.image_url AS "imageUrl",
                 q.option_a AS "optionA", q.option_b AS "optionB", q.option_c AS "optionC", q.option_d AS "optionD",
                 q.correct_option AS "correctOption", q.hint, q.explanation,
                 q.detail_a AS "detailA", q.detail_b AS "detailB", q.detail_c AS "detailC", q.detail_d AS "detailD"
@@ -32,7 +32,7 @@ export function createSessionQuestionRepository(database = { query }) {
     async listForSession(sessionId) {
       const result = await database.query(
         `SELECT q.id, q.exam_set_id AS "examSetId", sq.question_number AS "questionNumber",
-                q.source_number AS "sourceNumber", q.prompt,
+                q.source_number AS "sourceNumber", q.prompt, q.image_url AS "imageUrl",
                 q.option_a AS "optionA", q.option_b AS "optionB", q.option_c AS "optionC", q.option_d AS "optionD",
                 q.correct_option AS "correctOption", q.hint, q.explanation,
                 q.detail_a AS "detailA", q.detail_b AS "detailB", q.detail_c AS "detailC", q.detail_d AS "detailD"

@@ -5,9 +5,11 @@ import { fileURLToPath } from 'node:url';
 import { createSessionService } from './services/session-service.js';
 import { createExamsRoutes } from './routes/exams-routes.js';
 import { createSessionsRoutes } from './routes/sessions-routes.js';
+import { createAuthRoutes } from './routes/auth-routes.js';
 import { createExamSetRepository } from './models/exam-set-repository.js';
 import { createQuestionRepository } from './models/question-repository.js';
 import { createSessionRepository } from './models/session-repository.js';
+import { createUserRepository } from './models/user-repository.js';
 import { migrate } from './db/migrate.js';
 
 const currentFile = fileURLToPath(import.meta.url);
@@ -84,10 +86,12 @@ export function createApp({
   examSetRepository = createExamSetRepository(),
   questionRepository = createQuestionRepository(),
   sessionRepository = createSessionRepository(),
+  userRepository = createUserRepository(),
 } = {}) {
   const handlers = [
+    createAuthRoutes({ userRepository }),
     createExamsRoutes({ sessionService, examSetRepository, questionRepository, sessionRepository }),
-    createSessionsRoutes({ sessionService }),
+    createSessionsRoutes({ sessionService, sessionRepository, userRepository }),
   ];
 
   return http.createServer(async (request, response) => {
@@ -104,6 +108,7 @@ export function createApp({
       }
 
       const payload = {
+        headers: request.headers,
         method: request.method,
         pathname: url.pathname,
         body: request.method === 'POST' ? await readRequestBody(request) : {},

@@ -21,13 +21,16 @@ export function createExamImportService({
   questionRepository = createQuestionRepository(),
 } = {}) {
   return {
-    async importFile(filePath) {
+    async importFile(filePath, customExamName) {
       const { questions, skippedRows, totalRows } = await parseCsvFile(filePath);
       const fileName = path.basename(filePath);
-      const slug = slugify(path.basename(filePath, path.extname(filePath)));
+      const baseSlug = slugify(path.basename(filePath, path.extname(filePath)));
+      const slug = customExamName ? slugify(customExamName) : baseSlug;
+      const title = customExamName || toTitle(baseSlug);
+      
       const examSet = await examSetRepository.upsert({
         slug,
-        title: toTitle(slug),
+        title,
         sourceFileName: fileName,
         questionCount: questions.length,
         skippedRowCount: skippedRows.length,

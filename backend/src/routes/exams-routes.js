@@ -36,10 +36,31 @@ export function createExamsRoutes({
       return jsonResponse({ message: 'All exams and sessions cleared' });
     }
 
+    // Delete individual exam by ID
+    const deleteExamMatch = request.pathname.match(/^\/api\/exams\/(\d+)$/);
+    if (request.method === 'DELETE' && deleteExamMatch) {
+      const examSetId = Number(deleteExamMatch[1]);
+      console.log(`DELETE /api/exams/${examSetId}`);
+      const exam = await examSetRepository.getById(examSetId);
+      if (!exam) {
+        console.log(`Exam ${examSetId} not found`);
+        return jsonResponse({ error: { message: 'Exam not found' } }, 404);
+      }
+      // Delete sessions, questions, and exam set
+      console.log(`Deleting sessions for exam ${examSetId}`);
+      await sessionRepository.deleteByExamSetId(examSetId);
+      console.log(`Deleting questions for exam ${examSetId}`);
+      await questionRepository.deleteByExamSetId(examSetId);
+      console.log(`Deleting exam set ${examSetId}`);
+      await examSetRepository.deleteById(examSetId);
+      console.log(`Exam ${examSetId} deleted successfully`);
+      return jsonResponse({ message: `Exam "${exam.title}" deleted` });
+    }
+
     if (request.method === 'POST' && request.pathname === '/api/exams/import') {
       try {
-        // Expect JSON with csvContent and filename
-        const { csvContent, filename } = request.body || {};
+        // Expect JSON with csvContent, filename, and optional examName
+        const { csvContent, filename, examName } = request.body || {};
         if (!csvContent || !filename) {
           return jsonResponse(
             { error: { message: 'Missing csvContent or filename' } },
@@ -58,8 +79,8 @@ export function createExamsRoutes({
         });
 
         try {
-          // Import the file
-          const result = await importService.importFile(tmpFile);
+          // Import the file with optional exam name
+          const result = await importService.importFile(tmpFile, examName);
           return jsonResponse({
             success: true,
             message: `Imported ${result.questionCount} questions from ${filename}`,
