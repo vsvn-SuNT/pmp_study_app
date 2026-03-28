@@ -79,10 +79,6 @@ async function request(url, options = {}) {
   return payload;
 }
 
-function setStatus(message) {
-  qs('status').textContent = message;
-}
-
 function showToast(message, type = 'info', duration = 3000) {
   const container = qs('toast-container');
   const toast = document.createElement('div');
@@ -234,12 +230,12 @@ function renderLoginScreen() {
   const handleLogin = async () => {
     const username = usernameInput.value.trim();
     if (!username) {
-      setStatus('Please enter a username');
+      showToast('Please enter a username', 'error');
       return;
     }
 
     try {
-      setStatus('Logging in...');
+      showToast('Logging in...', 'info', 0);
       const result = await request('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ username }),
@@ -249,10 +245,9 @@ function renderLoginScreen() {
       state.username = result.username;
       persistUser(result.userId, result.username);
       
-      setStatus('');
       await loadExamSets();
     } catch (error) {
-      setStatus(`Login failed: ${error.message}`);
+      showToast(`Login failed: ${error.message}`, 'error');
     }
   };
 
@@ -279,7 +274,7 @@ async function logout() {
   clearPersistedUser();
   clearState();
   renderLoginScreen();
-  setStatus('Logged out');
+  showToast('Logged out', 'info');
 }
 
 function renderTimer(deadlineAt) {
@@ -502,7 +497,7 @@ function renderQuestion() {
 
 function renderAllQuestions() {
   if (!state.allQuestions || state.allQuestions.length === 0) {
-    setStatus('No questions loaded');
+    showToast('No questions loaded', 'error');
     return;
   }
 
@@ -729,7 +724,6 @@ async function startSession({ examSetId, mode }) {
   });
   state.session = session;
   syncPersistedSession(session);
-  setStatus(buildSessionStatus(session));
   renderTimer(session.deadlineAt);
   await loadAllQuestions();
 }
@@ -742,7 +736,6 @@ async function restoreSession(sessionId) {
   }
   state.session = session;
   syncPersistedSession(session);
-  setStatus(buildSessionStatus(session, { resumed: true }));
   renderTimer(session.deadlineAt);
   await loadAllQuestions();
   return true;
@@ -760,7 +753,7 @@ async function loadAllQuestions() {
     renderTimer(payload.deadlineAt);
     renderAllQuestions();
   } catch (error) {
-    setStatus(`Error loading questions: ${error.message}`);
+    showToast(`Error loading questions: ${error.message}`, 'error');
   }
 }
 
@@ -831,7 +824,7 @@ async function boot() {
     // No active session, load exam sets
     await loadExamSets();
   } catch (error) {
-    setStatus(error.message);
+    showToast(error.message, 'error');
   }
 }
 
@@ -900,7 +893,6 @@ async function clearAllExams() {
       console.log(`Exam ${examId} deleted:`, response);
     }
     
-    setStatus(`${count} ${examWord} deleted`);
     showToast(`${count} ${examWord} deleted successfully`, 'success');
     state.deleteMode = false;
     state.selectedExamsForDelete.clear();
@@ -909,7 +901,6 @@ async function clearAllExams() {
     console.log('Exam sets reloaded');
   } catch (error) {
     console.error('Delete error:', error);
-    setStatus(`Delete failed: ${error.message}`);
     showToast(`Delete failed: ${error.message}`, 'error');
   }
 }

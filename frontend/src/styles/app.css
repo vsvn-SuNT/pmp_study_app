@@ -150,10 +150,12 @@ button:disabled {
   border-radius: 18px;
   padding: 1rem 1.25rem;
   transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  font-weight: normal;
 }
 
 .answer-list .answer-card strong {
   flex: 0 0 auto;
+  font-weight: normal;
 }
 
 .answer-list .answer-card:hover:not(:disabled) {
