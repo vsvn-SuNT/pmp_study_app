@@ -1,6 +1,6 @@
 param(
     [string]$ComposeFile = 'docker-compose.yml',
-    [string]$SourceDirectory = '/pdf_to_csv/csv'
+    [string]$SourceDirectory = '/app/pdf_to_csv/csv'
 )
 
 $ErrorActionPreference = 'Stop'

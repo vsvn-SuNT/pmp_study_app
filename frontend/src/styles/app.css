@@ -23,7 +23,7 @@ body {
   min-height: 100vh;
   background: linear-gradient(160deg, #f7f2ea 0%, #efe2ce 100%);
   color: var(--text);
-  padding-top: 180px;
+  padding-top: 112px;
 }
 
 .navbar {
@@ -540,7 +540,7 @@ button:disabled {
   }
 
   body {
-    padding-top: 200px;
+    padding-top: 148px;
   }
 }
 

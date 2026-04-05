@@ -33,11 +33,6 @@ services:
         condition: service_healthy
     ports:
       - "3001:3001"
-    volumes:
-      - ./csv:/app/../csv:ro
-      - ./sql:/app/../sql:ro
-      - ./pdf_to_csv/csv:/pdf_to_csv/csv:ro
-
   frontend:
     build:
       context: .

@@ -38,7 +38,7 @@ export async function runSqlFile(filePath) {
 
 export function resolveProjectPath(...parts) {
   const currentFile = fileURLToPath(import.meta.url);
-  const projectRoot = path.resolve(path.dirname(currentFile), '..', '..', '..');
+  const projectRoot = path.resolve(path.dirname(currentFile), '..', '..');
   return path.join(projectRoot, ...parts);
 }
 
