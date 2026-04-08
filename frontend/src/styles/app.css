@@ -1180,9 +1180,9 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.35rem;
   border-bottom: 1px solid #e0d0c0;
   flex-wrap: wrap;
 }
@@ -1190,25 +1190,36 @@ button:disabled {
 .question-header > div {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
+}
+
+.question-header h3 {
+  margin: 0;
+  line-height: 1.1;
+  font-size: 1.1rem;
 }
 
 .question-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .question-actions .mark-btn {
   min-width: auto;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.45rem;
+  min-height: 26px;
+  line-height: 1;
+  font-size: 0.8rem;
   border-radius: 6px;
 }
 
 .question-status {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   align-items: center;
 }
 
@@ -1216,10 +1227,11 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 28px;
+  min-width: 24px;
+  height: 24px;
+  line-height: 1;
   border-radius: 50%;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
@@ -1288,10 +1300,10 @@ button:disabled {
   .question-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: 0.35rem;
   }
 
   .question-header h3 {
-    font-size: 1rem;
+    font-size: 0.95rem;
   }
 }
