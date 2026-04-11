@@ -51,6 +51,21 @@ export function createSessionsRoutes({ sessionService, sessionRepository, userRe
       }
     }
 
+    if (request.method === 'GET' && request.pathname === '/api/sessions/active') {
+      try {
+        if (!userId) return getAuthError();
+        const user = await userRepository.getById(userId);
+        if (!user) return getAuthError();
+
+        return jsonResponse({ session: await sessionService.getLatestActiveSessionForUser(userId) });
+      } catch (error) {
+        return jsonResponse(
+          { error: { code: 'SESSION_ERROR', message: error.message } },
+          400,
+        );
+      }
+    }
+
     const sessionMatch = request.pathname.match(/^\/api\/sessions\/(\d+)$/);
     if (request.method === 'DELETE' && sessionMatch) {
       try {

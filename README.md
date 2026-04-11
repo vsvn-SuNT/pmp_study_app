@@ -82,7 +82,44 @@ cd backend
 npm.cmd test
 ```
 
-## 8. Deployment notes
+## 8. Sync study progress between computers
+
+PostgreSQL data is stored in the Docker volume named `postgres-data`, so it is not automatically included when you push the repository to GitHub. To move your study progress between two computers, create a database dump, commit it, then restore it on the other computer.
+
+From the app UI:
+
+1. Open the app and log in.
+2. Use `Download Backup` in the `Sync progress` section.
+3. Save the downloaded JSON file into `backups/`, then commit and push it to GitHub.
+4. On the other computer, pull from GitHub and use `Restore Backup` in the same UI section.
+
+The UI backup is a portable JSON file and works when the app is running through Docker.
+
+Progress resume is database-backed. The browser only remembers your username for convenience; when the app opens it logs in again, asks the backend for your latest `in_progress` session, and resumes from that session's current question.
+
+Command-line alternative:
+
+On computer 1, after studying:
+
+```powershell
+docker compose up -d
+powershell -ExecutionPolicy Bypass -File .\scripts\backup-db.ps1
+git add backups/pmp_learning_app.dump
+git commit -m "Backup PMP study progress"
+git push
+```
+
+On computer 2, before continuing:
+
+```powershell
+git pull
+docker compose up --build -d
+powershell -ExecutionPolicy Bypass -File .\scripts\restore-db.ps1
+```
+
+The restore step replaces the local PostgreSQL database with the backup file. If you studied separately on both computers before syncing, choose which machine has the latest progress before restoring.
+
+## 9. Deployment notes
 
 - The full app is deployed through one `docker-compose.yml` file.
 - The frontend and backend run as separate containers.

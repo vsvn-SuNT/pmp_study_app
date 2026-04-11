@@ -1,5 +1,3 @@
-const STORAGE_KEY = 'pmp-active-session-id';
-const USER_STORAGE_KEY = 'pmp-user-id';
 const USERNAME_STORAGE_KEY = 'pmp-username';
 
 const state = {
@@ -18,6 +16,7 @@ const state = {
   resultSource: null,
   deleteMode: false,
   selectedExamsForDelete: new Set(),
+  pendingScrollQuestionNumber: null,
 };
 
 let timerInterval;
@@ -111,10 +110,6 @@ export function getFeedbackTone(feedback) {
   return feedback?.result === 'correct' ? 'correct' : 'incorrect';
 }
 
-export function shouldPersistSession(session) {
-  return session?.mode === 'exam' && session?.status === 'in_progress';
-}
-
 export function buildSessionStatus(session, { resumed = false } = {}) {
   if (session.mode === 'practice') {
     return 'Practice mode shows feedback immediately after each answer.';
@@ -179,7 +174,7 @@ function closeImportModal() {
   qs('exam-name').value = '';
 }
 
-function showConfirmDialog(message) {
+function showConfirmDialog(message, okLabel = 'Delete') {
   return new Promise((resolve) => {
     const modal = qs('confirm-modal');
     const messageEl = qs('confirm-modal-message');
@@ -189,6 +184,7 @@ function showConfirmDialog(message) {
 
     // Set message
     messageEl.textContent = message;
+    okBtn.textContent = okLabel;
 
     // Show modal
     modal.classList.remove('modal-hidden');
@@ -222,34 +218,17 @@ function showConfirmDialog(message) {
   });
 }
 
-function persistSessionId(sessionId) {
+function persistUser(username) {
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem(STORAGE_KEY, String(sessionId));
-  }
-}
-
-function clearPersistedSessionId() {
-  if (typeof window !== 'undefined') {
-    window.localStorage.removeItem(STORAGE_KEY);
-  }
-}
-
-function readPersistedSessionId() {
-  return typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
-}
-
-function persistUser(userId, username) {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(USER_STORAGE_KEY, String(userId));
     window.localStorage.setItem(USERNAME_STORAGE_KEY, String(username));
   }
 }
 
 function clearPersistedUser() {
   if (typeof window !== 'undefined') {
-    window.localStorage.removeItem(USER_STORAGE_KEY);
+    window.localStorage.removeItem('pmp-user-id');
+    window.localStorage.removeItem('pmp-active-session-id');
     window.localStorage.removeItem(USERNAME_STORAGE_KEY);
-    window.localStorage.removeItem(STORAGE_KEY); // Also clear session when logging out
   }
 }
 
@@ -257,17 +236,8 @@ function readPersistedUser() {
   if (typeof window === 'undefined') {
     return null;
   }
-  const userId = window.localStorage.getItem(USER_STORAGE_KEY);
   const username = window.localStorage.getItem(USERNAME_STORAGE_KEY);
-  return userId && username ? { userId: Number(userId), username } : null;
-}
-
-function syncPersistedSession(session) {
-  if (shouldPersistSession(session)) {
-    persistSessionId(session.id);
-    return;
-  }
-  clearPersistedSessionId();
+  return username ? { username } : null;
 }
 
 function updateNavbarUser(username) {
@@ -324,16 +294,12 @@ function renderLoginScreen() {
     try {
       // Show toast for logging in, but auto-dismiss after 3 seconds
       showToast('Logging in...', 'info', 3000);
-      const result = await request('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username }),
-      });
+      await loginUser(username);
       
-      state.userId = result.userId;
-      state.username = result.username;
-      persistUser(result.userId, result.username);
-      updateNavbarUser(result.username);
-      
+      if (await restoreLatestActiveSession()) {
+        return;
+      }
+
       await loadExamSets();
     } catch (error) {
       showToast(`Login failed: ${error.message}`, 'error');
@@ -349,6 +315,19 @@ function renderLoginScreen() {
 
   // Focus on input
   usernameInput.focus();
+}
+
+async function loginUser(username) {
+  const result = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username }),
+  });
+
+  state.userId = result.userId;
+  state.username = result.username;
+  persistUser(result.username);
+  updateNavbarUser(result.username);
+  return result;
 }
 
 async function logout() {
@@ -435,10 +414,27 @@ function renderExamSelection() {
         <button id="clear-btn" class="secondary" onclick="window.clearAllExams()">${clearButtonLabel}</button>
         ${cancelButton}
       </div>
+      <div class="sync-controls">
+        <div>
+          <h3>Sync progress</h3>
+          <p>Download a backup file on this computer, commit it to GitHub, then restore that file on the other computer.</p>
+        </div>
+        <div class="actions">
+          <button id="backup-db-btn" class="secondary">Download Backup</button>
+          <button id="restore-db-btn" class="secondary">Restore Backup</button>
+          <input id="backup-file-input" type="file" accept="application/json,.json" hidden />
+        </div>
+      </div>
       <h2>Select an exam set</h2>
       <div class="grid exam-grid">${examCards || '<p>No ready exam sets are available.</p>'}</div>
     </section>
   `;
+
+  qs('backup-db-btn')?.addEventListener('click', backupDatabase);
+  qs('restore-db-btn')?.addEventListener('click', () => {
+    qs('backup-file-input')?.click();
+  });
+  qs('backup-file-input')?.addEventListener('change', restoreDatabaseFromSelectedFile);
 
   if (state.deleteMode) {
     // Add checkbox change listeners with event delegation
@@ -851,6 +847,17 @@ function renderAllQuestions() {
       }
     });
   });
+
+  if (state.pendingScrollQuestionNumber) {
+    const questionNumber = state.pendingScrollQuestionNumber;
+    state.pendingScrollQuestionNumber = null;
+    window.setTimeout(() => {
+      const element = document.getElementById(`question-${questionNumber}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 0);
+  }
 }
 
 function buildReviewMarkup(item) {
@@ -902,7 +909,6 @@ function renderResults() {
   showNavbarUser();
   clearInterval(timerInterval);
   renderTimer(null);
-  clearPersistedSessionId();
   const tiles = summarizeResults(state.result.summary)
     .map((item) => `<div class="summary-tile"><p>${item.label}</p><strong>${item.value}</strong></div>`)
     .join('');
@@ -1010,14 +1016,8 @@ async function clearExamHistory() {
     return;
   }
 
-  const persistedSessionId = readPersistedSessionId();
-  const clearsPersistedSession = state.history.some((session) => String(session.id) === persistedSessionId);
-
   try {
     const payload = await request(`/api/exams/${state.historyExam.id}/sessions`, { method: 'DELETE' });
-    if (clearsPersistedSession) {
-      clearPersistedSessionId();
-    }
     state.history = [];
     state.selectedHistorySessions.clear();
     state.result = null;
@@ -1042,15 +1042,9 @@ async function deleteSelectedHistorySessions() {
     return;
   }
 
-  const persistedSessionId = readPersistedSessionId();
-
   try {
     for (const sessionId of sessionIds) {
       await request(`/api/sessions/${sessionId}`, { method: 'DELETE' });
-    }
-
-    if (state.selectedHistorySessions.has(persistedSessionId)) {
-      clearPersistedSessionId();
     }
 
     const deletedIds = new Set(sessionIds);
@@ -1164,7 +1158,7 @@ function clearState() {
   state.history = [];
   state.selectedHistorySessions.clear();
   state.resultSource = null;
-  clearPersistedSessionId();
+  state.pendingScrollQuestionNumber = null;
 }
 
 async function loadExamSets() {
@@ -1182,19 +1176,28 @@ async function startSession({ examSetId, mode }) {
     body: JSON.stringify({ examSetId, mode }),
   });
   state.session = session;
-  syncPersistedSession(session);
   renderTimer(session.deadlineAt);
   await loadAllQuestions();
+}
+
+async function restoreLatestActiveSession() {
+  const payload = await request('/api/sessions/active');
+  const session = payload.session;
+  if (!session) {
+    return false;
+  }
+
+  state.pendingScrollQuestionNumber = session.currentQuestionNumber;
+  showToast(`Resuming your ${session.mode === 'practice' ? 'Practice' : 'Exam'} session at question ${session.currentQuestionNumber}.`, 'info', 5000);
+  return restoreSession(session.id);
 }
 
 async function restoreSession(sessionId) {
   const session = await request(`/api/sessions/${sessionId}`);
   if (session.status !== 'in_progress') {
-    clearPersistedSessionId();
     return false;
   }
   state.session = session;
-  syncPersistedSession(session);
   renderTimer(session.deadlineAt);
   await loadAllQuestions();
   return true;
@@ -1285,18 +1288,15 @@ async function boot() {
     // Check if user is logged in
     const persistedUser = readPersistedUser();
     if (persistedUser) {
-      state.userId = persistedUser.userId;
-      state.username = persistedUser.username;
-      updateNavbarUser(persistedUser.username);
+      await loginUser(persistedUser.username);
     } else {
       // No user logged in, show login screen
       renderLoginScreen();
       return;
     }
 
-    // User is logged in, try to restore previous session
-    const persistedSessionId = readPersistedSessionId();
-    if (persistedSessionId && await restoreSession(Number(persistedSessionId))) {
+    // User is logged in, try to restore the latest active session from the database.
+    if (await restoreLatestActiveSession()) {
       return;
     }
 
@@ -1304,6 +1304,108 @@ async function boot() {
     await loadExamSets();
   } catch (error) {
     showToast(error.message, 'error');
+  }
+}
+
+function getBackupFileName(response) {
+  const disposition = response.headers.get('content-disposition') ?? '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  if (match) {
+    return match[1];
+  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return `pmp_learning_app_backup_${stamp}.json`;
+}
+
+async function backupDatabase() {
+  try {
+    showToast('Creating backup...', 'info', 3000);
+    const headers = {};
+    if (state.userId) {
+      headers['x-user-id'] = String(state.userId);
+    }
+
+    const response = await fetch('/api/backup', { headers });
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.error?.message ?? 'Backup failed.');
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = getBackupFileName(response);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast('Backup downloaded. Commit the file to GitHub to sync it.', 'success', 5000);
+  } catch (error) {
+    showToast(`Backup failed: ${error.message}`, 'error', 5000);
+  }
+}
+
+async function restoreDatabaseFromSelectedFile(event) {
+  const input = event.target;
+  const file = input.files?.[0];
+  input.value = '';
+
+  if (!file) {
+    return;
+  }
+
+  const confirmed = await showConfirmDialog(
+    `Restore database from "${file.name}"?\n\nThis replaces all local exams, users, sessions, and answers.`,
+    'Restore',
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    showToast('Restoring backup...', 'info', 3000);
+    const backup = JSON.parse(await file.text());
+    const payload = await request('/api/backup/restore', {
+      method: 'POST',
+      body: JSON.stringify({ backup, username: state.username }),
+    });
+
+    if (payload.user) {
+      state.userId = payload.user.id;
+      state.username = payload.user.username;
+      persistUser(payload.user.username);
+      updateNavbarUser(payload.user.username);
+    }
+
+    state.session = null;
+    state.question = null;
+    state.allQuestions = [];
+    state.feedback = null;
+    state.result = null;
+    state.history = [];
+    state.historyExam = null;
+    state.selectedHistorySessions.clear();
+    showToast(
+      `Restore complete: ${payload.examSetCount} exams, ${payload.sessionCount} sessions.`,
+      'success',
+      5000,
+    );
+
+    if (payload.activeSession) {
+      state.pendingScrollQuestionNumber = payload.activeSession.currentQuestionNumber;
+      showToast(
+        `Resuming ${payload.activeSession.examTitle} at question ${payload.activeSession.currentQuestionNumber}.`,
+        'info',
+        5000,
+      );
+      await restoreSession(payload.activeSession.id);
+      return;
+    }
+
+    await loadExamSets();
+  } catch (error) {
+    showToast(`Restore failed: ${error.message}`, 'error', 5000);
   }
 }
 

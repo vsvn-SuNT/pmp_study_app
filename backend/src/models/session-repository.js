@@ -63,6 +63,23 @@ export function createSessionRepository(database = { query }) {
       return result.rows[0] ?? null;
     },
 
+    async findLatestActiveSessionForUser(userId) {
+      const result = await database.query(
+        `SELECT id, exam_set_id AS "examSetId", mode, status, started_at AS "startedAt",
+                deadline_at AS "deadlineAt", completed_at AS "completedAt", total_questions AS "totalQuestions",
+                current_question_number AS "currentQuestionNumber", correct_count AS "correctCount",
+                incorrect_count AS "incorrectCount", unanswered_count AS "unansweredCount",
+                correct_percentage AS "correctPercentage", incorrect_percentage AS "incorrectPercentage",
+                user_id AS "userId"
+         FROM study_sessions
+         WHERE user_id = $1 AND status = 'in_progress'
+         ORDER BY started_at DESC, id DESC
+         LIMIT 1`,
+        [userId],
+      );
+      return result.rows[0] ?? null;
+    },
+
     async listSessionsForExamSetAndUser(userId, examSetId) {
       const result = await database.query(
         `SELECT id, exam_set_id AS "examSetId", mode, status, started_at AS "startedAt",

@@ -696,6 +696,29 @@ button:disabled {
   color: var(--text);
 }
 
+.sync-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  background: #eef8f6;
+  border: 1px solid #a7d8d2;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.sync-controls h3 {
+  margin: 0 0 0.35rem;
+}
+
+.sync-controls p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
 /* Bullet point formatting - improves readability of formatted lists */
 .answer-card,
 .feedback,

@@ -6,6 +6,7 @@ import { createSessionService } from './services/session-service.js';
 import { createExamsRoutes } from './routes/exams-routes.js';
 import { createSessionsRoutes } from './routes/sessions-routes.js';
 import { createAuthRoutes } from './routes/auth-routes.js';
+import { createBackupRoutes } from './routes/backup-routes.js';
 import { createExamSetRepository } from './models/exam-set-repository.js';
 import { createQuestionRepository } from './models/question-repository.js';
 import { createSessionRepository } from './models/session-repository.js';
@@ -90,6 +91,7 @@ export function createApp({
 } = {}) {
   const handlers = [
     createAuthRoutes({ userRepository }),
+    createBackupRoutes(),
     createExamsRoutes({ sessionService, examSetRepository, questionRepository, sessionRepository }),
     createSessionsRoutes({ sessionService, sessionRepository, userRepository }),
   ];

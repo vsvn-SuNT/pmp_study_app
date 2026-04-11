@@ -52,6 +52,13 @@ test('GET /api/exams and session lifecycle endpoints work for the MVP flow', asy
     assert.equal(resumePayload.status, 'in_progress');
     assert.equal(resumePayload.totalQuestions, 5);
 
+    const activeResponse = await fetch(`${testServer.baseUrl}/api/sessions/active`, {
+      headers: authHeaders,
+    });
+    const activePayload = await activeResponse.json();
+    assert.equal(activePayload.session.id, sessionPayload.id);
+    assert.equal(activePayload.session.status, 'in_progress');
+
     const completeResponse = await fetch(`${testServer.baseUrl}/api/sessions/${sessionPayload.id}/complete`, {
       method: 'POST',
       headers: authHeaders,

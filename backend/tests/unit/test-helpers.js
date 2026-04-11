@@ -137,6 +137,11 @@ export function createMockRepositories({ questionCount = 5, skippedRowCount = 0 
       async findActiveSessionForUser(userId, examSetId) {
         return sessions.find((item) => item.userId === userId && item.examSetId === examSetId && item.status === 'in_progress') ?? null;
       },
+      async findLatestActiveSessionForUser(userId) {
+        return sessions
+          .filter((item) => item.userId === userId && item.status === 'in_progress')
+          .sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime() || right.id - left.id)[0] ?? null;
+      },
       async listSessionsForExamSetAndUser(userId, examSetId) {
         return sessions
           .filter((item) => item.userId === userId && item.examSetId === examSetId)

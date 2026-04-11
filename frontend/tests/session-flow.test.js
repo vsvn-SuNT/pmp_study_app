@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyResults, buildSessionStatus, createStateSnapshot, shouldPersistSession, summarizeResults } from '../src/scripts/app.js';
+import { applyResults, buildSessionStatus, createStateSnapshot, summarizeResults } from '../src/scripts/app.js';
 
 test('session flow helpers store final results cleanly', () => {
   const snapshot = createStateSnapshot();
@@ -15,7 +15,5 @@ test('session flow helpers store final results cleanly', () => {
 });
 
 test('session flow helpers describe exam resume behavior', () => {
-  assert.equal(shouldPersistSession({ mode: 'exam', status: 'in_progress' }), true);
-  assert.equal(shouldPersistSession({ mode: 'practice', status: 'in_progress' }), false);
   assert.match(buildSessionStatus({ mode: 'exam', status: 'in_progress' }, { resumed: true }), /Resumed/);
 });

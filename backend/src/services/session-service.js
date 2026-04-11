@@ -178,6 +178,16 @@ export function createSessionService({
       return toSessionSummary({ ...session, importSummary: examSet?.importSummary ?? null });
     },
 
+    async getLatestActiveSessionForUser(userId) {
+      const session = await sessionRepository.findLatestActiveSessionForUser(userId);
+      if (!session) {
+        return null;
+      }
+
+      const examSet = await examSetRepository.getById(session.examSetId);
+      return toSessionSummary({ ...session, importSummary: examSet?.importSummary ?? null });
+    },
+
     async listSessionsForExamSet(examSetId, userId) {
       const sessions = await sessionRepository.listSessionsForExamSetAndUser(userId, examSetId);
       return sessions.map(buildHistoryEntry);
